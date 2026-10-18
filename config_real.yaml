@@ -1,0 +1,98 @@
+# Opus Agent Desk - REAL historical data configuration
+# 1) python scripts/fetch_data.py            (downloads into data/real/)
+# 2) python main.py backtest --config config_real.yaml
+# 3) python main.py run --config config_real.yaml
+mode: paper
+allow_live_orders: false
+
+reports_dir: reports/real
+
+data:
+  prices_dir: data/real/prices
+  news_file: data/real/news.json
+  label: "REAL HISTORICAL DATA (see data/real/fetch_manifest.json)"
+  warnings:
+    - "Survivorship bias: today's large, successful companies were picked with hindsight, which flatters any long-only test."
+    - "Free news APIs cover only recent months, so most of the backtest runs without news; earnings dates are the main event input."
+
+# Large, liquid US stocks across sectors. Edit freely; keep it small on free API tiers.
+universe: [AAPL, MSFT, NVDA, AMZN, GOOGL, META, JPM, XOM, JNJ, WMT, KO, CAT]
+
+fetch:
+  history_years: 2               # Polygon's free tier covers about 2 years
+  news_days: 90                  # how far back to request news
+  earnings_known_days_before: 21 # assumption: an earnings date is public 3 weeks ahead
+  # Order to try market-data providers in. The first that works for a ticker is used.
+  market_providers: [polygon, twelvedata, finnhub, alphavantage]
+  # News sources to merge (duplicates are removed). Providers without a key are skipped.
+  news_providers: [finnhub, alphavantage, marketaux, newsapi]
+  earnings_providers: [finnhub, alphavantage]
+  reconcile_tolerance_pct: 0.5   # close-price difference that counts as a break between providers
+  min_seconds_between_calls:     # stay inside free-tier rate limits
+    polygon: 12.5
+    twelvedata: 8
+    finnhub: 1.1
+    alphavantage: 1.5
+    newsapi: 1
+    marketaux: 1
+  daily_call_budget:             # stop calling a provider once its free daily quota is used
+    alphavantage: 25
+    newsapi: 100
+    marketaux: 100
+    twelvedata: 800
+  company_names:                 # NewsAPI searches by name, not ticker
+    AAPL: Apple
+    MSFT: Microsoft
+    NVDA: Nvidia
+    AMZN: Amazon
+    GOOGL: Alphabet
+    META: Meta Platforms
+    JPM: JPMorgan
+    XOM: Exxon Mobil
+    JNJ: Johnson & Johnson
+    WMT: Walmart
+    KO: Coca-Cola
+    CAT: Caterpillar
+
+scout:
+  lookback_days: 20
+  volume_z_threshold: 2.0
+  return_z_threshold: 2.0
+  max_watchlist: 3
+
+charts:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+  min_history_days: 60
+
+news:
+  lookback_days: 3
+  use_llm: false
+
+strategy:
+  stop_atr_multiple: 2.0
+  target_atr_multiple: 3.0
+  max_holding_days: 10
+  rsi_max: 75
+
+risk:
+  starting_equity: 100000
+  max_risk_per_trade_pct: 1.0
+  max_position_pct: 20.0
+  max_open_positions: 3
+  max_total_exposure_pct: 60.0
+  min_avg_dollar_volume: 50000000
+  max_data_age_days: 4
+  max_correlation: 0.8
+  event_blackout: true
+
+backtest:
+  commission_bps: 5
+  slippage_bps: 5
+  warmup_days: 60
+
+llm:
+  model: claude-sonnet-5-5
+  max_tokens: 1500

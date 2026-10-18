@@ -82,8 +82,11 @@ def run(ctx: RunContext, reports: dict) -> dict:
         by_id = {c["id"]: c for c in classes}
         method = f"LLM ({ctx.cfg['llm']['model']})"
     else:
-        by_id = {i["id"]: {"sentiment": _keyword_sentiment(i["headline"]),
-                           "kind": i.get("kind", "unverified")} for i in fresh}
+        # Prefer the provider's own sentiment label when the feed supplies one.
+        by_id = {i["id"]: {"sentiment": i.get("provider_sentiment") or _keyword_sentiment(i["headline"]),
+                           "kind": i.get("kind", "unclassified")} for i in fresh}
+        if any(i.get("provider_sentiment") for i in fresh):
+            method = "provider sentiment labels + keyword rules"
 
     # 3. All known upcoming scheduled events (earnings etc.). Risk decides which
     #    ones fall inside the holding window, so News passes on every future one.
@@ -121,7 +124,7 @@ def run(ctx: RunContext, reports: dict) -> dict:
         risks.append(f"Scheduled {e['event_type']} for {e['ticker']} on {e['event_date']}.")
     opinions = sum(1 for i in fresh if by_id[i["id"]]["kind"] != "fact")
     if opinions:
-        risks.append(f"{opinions} item(s) are opinion or unverified, not confirmed fact.")
+        risks.append(f"{opinions} item(s) not classified as confirmed fact.")
 
     summary = "; ".join(f"{t}: {v['sentiment']} ({len(v['items'])} item(s))" for t, v in by_ticker.items())
     return make_report(

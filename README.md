@@ -38,13 +38,64 @@ python main.py                      # run the six agents on the latest date
 python main.py run --as-of 2026-09-17   # a date where the system approves a paper trade
 python main.py run --as-of 2026-09-22   # a date where Risk vetoes (earnings in the holding window)
 python main.py backtest             # walk-forward backtest over the full history
-pytest                              # 32 tests
+pytest                              # 49 tests
 ```
 
 3. To see the dashboard, run `python -m http.server 8000`, click **Open in Browser** on the pop-up (or the **Ports** tab → port 8000), then go to `/reports/dashboard.html`. Press `Ctrl+C` in the terminal to stop the server.
 4. When you're done: **Codespaces** (bottom-left) → **Stop Current Codespace**, so you don't use up your free hours.
 
 Running locally instead works the same: create a virtual environment with Python 3.11+, then use the same commands.
+
+---
+
+## Use real market data and news
+
+### 1. Add your API keys as Codespaces secrets (safest)
+
+GitHub → your profile picture → **Settings → Codespaces → Secrets → New secret**. Add whichever you have, and give each one access to this repository:
+
+| Secret name | Provider | Used for |
+|---|---|---|
+| `POLYGON_API_KEY` | Polygon.io / Massive | Prices (split-adjusted) |
+| `TWELVEDATA_API_KEY` | Twelve Data | Prices |
+| `FINNHUB_API_KEY` | Finnhub | Prices*, news, earnings dates |
+| `ALPHAVANTAGE_API_KEY` | Alpha Vantage | Prices (unadjusted on free tier), news + sentiment, earnings |
+| `NEWSAPI_API_KEY` | NewsAPI.org | News (free plan: last ~30 days) |
+| `MARKETAUX_API_KEY` | Marketaux | News + sentiment |
+
+\*Finnhub price candles may need a paid plan; the script falls back to the next provider automatically.
+
+Then **restart the codespace** so it picks up the secrets. (Alternative: `cp .env.example .env` and paste keys there. `.env` is git-ignored. Never commit keys or paste them into chats.)
+
+### 2. Download the data
+
+```bash
+git pull
+pip install -r requirements.txt
+python scripts/fetch_data.py --check-keys   # shows which keys are set, never the keys themselves
+python scripts/fetch_data.py --reconcile    # prices + news + earnings, and cross-checks prices between providers
+```
+
+What it does:
+- **Prices:** tries providers in order (Polygon → Twelve Data → Finnhub → Alpha Vantage) and uses the first that works for each ticker. It flags data-quality problems such as daily moves over 40% (often an unadjusted stock split).
+- **Reconciliation** (`--reconcile`): fetches each ticker from every provider you have a key for and compares closing prices. Breaks above 0.5% go to `reports/real/data_reconciliation_breaks.csv`. Treat it like a cash-vs-custody rec: unexplained breaks mean don't trust the backtest yet.
+- **News:** merges every news provider you have, removes duplicates, and keeps each provider's own sentiment label where one exists.
+- **Earnings dates:** become scheduled events, so Risk can veto trades into earnings. Assumption: a date is treated as public 21 days before it happens.
+- **Audit trail:** `data/real/fetch_manifest.json` records which provider supplied each ticker, row counts, date ranges, quality issues and errors. No keys are ever written.
+- **Rate limits:** calls are spaced and capped per provider (for example Alpha Vantage's 25 calls/day) in `config_real.yaml`.
+
+Downloaded data stays in `data/real/` and is git-ignored, because most providers don't allow redistribution.
+
+### 3. Run on real data
+
+```bash
+python main.py backtest --config config_real.yaml
+python main.py run --config config_real.yaml        # today's decision on the latest bar
+```
+
+Reports go to `reports/real/`. Read the warnings it prints: survivorship bias (the stock list was chosen with hindsight) and limited news history both make results look better or less informed than reality.
+
+If a ticker fails to download, the script tells you to remove it from `universe` in `config_real.yaml`; the Scout refuses to run with a missing ticker.
 
 ---
 
@@ -106,18 +157,20 @@ opus_desk/
   backtest.py      walk-forward simulation with costs and benchmark
   dashboard.py     static HTML dashboard
   llm.py           optional Claude client (News only)
+  providers/       read-only adapters: Polygon, Twelve Data, Finnhub, Alpha Vantage, NewsAPI, Marketaux
+scripts/fetch_data.py  download real prices, news and earnings dates into data/real/
+config_real.yaml   settings for real data (universe, providers, rate limits)
 prompts/news.md    the only LLM prompt
 data/fixtures/     synthetic TEST DATA (regenerate: python scripts/make_fixtures.py)
-tests/             32 tests
+tests/             49 tests (provider adapters tested offline)
 config.yaml        every rule and limit in one place
 ```
 
 ## Ideas for next steps
 
-1. Swap the synthetic fixtures for real historical daily data (keep the same CSV columns: `date,open,high,low,close,volume`).
-2. Test across many more tickers and years until you have hundreds of trades.
-3. Add a parameter-sensitivity report (does the result survive small changes to the rules?).
-4. Keep a separate log for any forward paper tests. Never mix backtest, paper and live results.
+1. Test across many more tickers and years until you have hundreds of trades.
+2. Add a parameter-sensitivity report (does the result survive small changes to the rules?).
+3. Keep a separate log for any forward paper tests. Never mix backtest, paper and live results.
 
 ## License
 

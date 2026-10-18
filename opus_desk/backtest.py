@@ -158,6 +158,12 @@ def run_backtest(cfg: dict, out_dir: Path | None = None) -> dict[str, Any]:
         summary["warnings"].append(f"Only {n} trades: far too few to conclude anything about edge.")
     if "synthetic" in cfg["data"]["label"].lower() or "test" in cfg["data"]["label"].lower():
         summary["warnings"].append("Synthetic TEST DATA: results say nothing about real markets.")
+    headlines = sorted(n["published_at"] for n in all_news if n.get("published_at") and not n.get("event_type"))
+    if not headlines:
+        summary["warnings"].append("No news headlines loaded: news checks were inactive for the whole test.")
+    elif pd.Timestamp(headlines[0]).tz_localize(None) > start_d:
+        summary["warnings"].append(f"News only covers {headlines[0][:10]} onwards; earlier decisions ran without news.")
+    summary["warnings"] += list(cfg["data"].get("warnings", []))
 
     out_dir = out_dir or ROOT / "reports"
     out_dir.mkdir(parents=True, exist_ok=True)
