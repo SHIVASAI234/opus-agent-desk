@@ -1,0 +1,56 @@
+# Opus Agent Desk configuration
+# ------------------------------------------------------------------
+# SAFETY: these two values are checked at startup. Any other value
+# stops the program. There is no live-trading code in this project.
+mode: paper
+allow_live_orders: false
+
+data:
+  prices_dir: data/fixtures/prices
+  news_file: data/fixtures/news.json
+  label: "TEST DATA (synthetic, fictional tickers)"
+
+universe: [TEST_AAA, TEST_BBB, TEST_CCC, TEST_DDD, TEST_EEE]
+
+scout:
+  lookback_days: 20          # window for "normal" volume/return behaviour
+  volume_z_threshold: 2.0    # volume this many std devs above normal = unusual
+  return_z_threshold: 2.0    # daily move this many std devs from normal = unusual
+  max_watchlist: 3
+
+charts:
+  sma_fast: 20
+  sma_slow: 50
+  rsi_period: 14
+  atr_period: 14
+  min_history_days: 60
+
+news:
+  lookback_days: 3           # only news published in the last N days counts
+  use_llm: false             # true = Claude classifies headlines (needs ANTHROPIC_API_KEY)
+
+strategy:
+  stop_atr_multiple: 2.0
+  target_atr_multiple: 3.0
+  max_holding_days: 10
+  rsi_max: 75
+
+risk:
+  starting_equity: 100000
+  max_risk_per_trade_pct: 1.0    # max loss if the stop is hit, % of equity
+  max_position_pct: 20.0         # max size of one position, % of equity
+  max_open_positions: 3
+  max_total_exposure_pct: 60.0   # sum of all positions, % of equity (no leverage)
+  min_avg_dollar_volume: 5000000 # 20-day average daily traded value
+  max_data_age_days: 3           # reject if the latest bar is older than this
+  max_correlation: 0.8           # vs any open position, 60-day daily returns
+  event_blackout: true           # reject if a scheduled event falls inside the holding window
+
+backtest:
+  commission_bps: 5   # per side
+  slippage_bps: 5     # per side
+  warmup_days: 60
+
+llm:
+  model: claude-sonnet-5-5
+  max_tokens: 1500
